@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
-
 
 const TakeQuiz = () => {
   const { id } = useParams();
@@ -11,6 +10,10 @@ const TakeQuiz = () => {
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState({}); 
   const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // New states for handling database submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // 1. Fetch Quiz Data from Supabase
   useEffect(() => {
@@ -35,8 +38,6 @@ const TakeQuiz = () => {
   }, [id]);
 
   // 2. THE RECURSIVE ENGINE
-  // This computes the flow by following every possible "next" link 
-  // until the branch ends, regardless of depth.
   const liveSequence = useMemo(() => {
     if (!quiz || !quiz.quiz_data) return [];
     
@@ -64,11 +65,11 @@ const TakeQuiz = () => {
           // If the choice has a conditional, that ID becomes the "next" in this specific branch
           if (choice?.conditionalQuestionId) {
             currentInBranchId = choice.conditionalQuestionId;
-            continue; // Move to the next iteration of the 'while' loop for this branch
+            continue; 
           }
         }
         
-        // If no answer or no conditional, terminate this branch and move to next base question
+        // Terminate branch
         currentInBranchId = null;
       }
     }
@@ -90,11 +91,28 @@ const TakeQuiz = () => {
     }
   };
 
+  // 3. Save to Supabase
   const submitResults = async () => {
-    console.log("Quiz Results:", answers);
-    // You can add a 'results' table insert here later
-    alert("Quiz Completed!");
-    navigate('/');
+    setIsSubmitting(true);
+    
+    const payload = {
+      quiz_id: id,
+      answers: answers
+    };
+
+    const { error } = await supabase
+      .from('quizzes_submissions')
+      .insert([payload]);
+    
+    if (error) {
+      console.error("Error submitting quiz:", error);
+      alert("Failed to save responses. Please try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    setIsSubmitted(true); // Trigger the Success UI
   };
 
   if (loading) return (
@@ -103,6 +121,28 @@ const TakeQuiz = () => {
         <div className="w-12 h-12 bg-indigo-500 rounded-full mb-4"></div>
         <p className="text-slate-400 font-medium">Loading Quiz Structure...</p>
       </div>
+    </div>
+  );
+
+  // 4. Success View (Shown after successful Supabase insert)
+  if (isSubmitted) return (
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 animate-in fade-in duration-700">
+      <div className="w-20 h-20 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-6 border-2 border-indigo-500">
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </div>
+      <h1 className="text-4xl font-bold text-white mb-4">Quiz Completed!</h1>
+      <p className="text-slate-400 mb-10 text-center max-w-md">
+        Your answers have been securely recorded. You can view the aggregated responses using the link below.
+      </p>
+      
+      <Link 
+        to={`/${id}/submissions`}
+        className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-500 transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] active:scale-95"
+      >
+        View Responses
+      </Link>
     </div>
   );
 
@@ -166,7 +206,7 @@ const TakeQuiz = () => {
         <div className="mt-16 flex justify-between items-center">
           <button
             onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-            disabled={currentIndex === 0}
+            disabled={currentIndex === 0 || isSubmitting}
             className="px-6 py-2 text-slate-500 hover:text-white disabled:opacity-0 transition-all font-medium uppercase tracking-widest text-xs"
           >
             Previous
@@ -174,10 +214,16 @@ const TakeQuiz = () => {
           
           <button
             onClick={handleNext}
-            disabled={!answers[currentQuestion.id]}
-            className="px-10 py-4 bg-white text-black font-black rounded-2xl hover:bg-indigo-400 transition-all disabled:opacity-10 active:scale-95 shadow-xl"
+            disabled={!answers[currentQuestion.id] || isSubmitting}
+            className="px-10 py-4 bg-white text-black font-black rounded-2xl hover:bg-indigo-400 transition-all disabled:opacity-10 active:scale-95 shadow-xl flex items-center justify-center min-w-[200px]"
           >
-            {currentIndex === liveSequence.length - 1 ? 'COMPLETE QUIZ' : 'CONTINUE'}
+            {isSubmitting ? (
+               <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+            ) : currentIndex === liveSequence.length - 1 ? (
+              'COMPLETE QUIZ'
+            ) : (
+              'CONTINUE'
+            )}
           </button>
         </div>
 

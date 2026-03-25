@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import CreateQuiz from "./pages/CreateQuiz"
 import TakeQuiz from "./pages/TakeQuiz"
 import Home from "./pages/Home"
+import SubmissionsPage from "./pages/SubmissionsPage"
 
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/createquiz" element={<CreateQuiz />} />
           <Route path="/takequiz/:id" element={<TakeQuiz />} />
+          <Route path="/:id/submissions" element={<SubmissionsPage />} />
 
           <Route path="*" element={
               <div className="min-h-screen flex items-center justify-center text-3xl font-bold opacity-20">
